@@ -17,7 +17,9 @@ void MainWidget::initialize()
 
     QVBoxLayout *layout = new QVBoxLayout(this);
     initializeFilterLine(layout);
+    initializeModels();
     initializeTreeView(layout);
+    initializeDelegate();
 }
 
 void MainWidget::initializeFilterLine(QVBoxLayout *layout)
@@ -29,7 +31,7 @@ void MainWidget::initializeFilterLine(QVBoxLayout *layout)
     connect(filterLine_, &QLineEdit::textChanged, this, &MainWidget::filterTextChanged);
 }
 
-void MainWidget::initializeTreeView(QVBoxLayout *layout)
+void MainWidget::initializeModels()
 {
     model_ = new QFileSystemModel(this);
     model_->setRootPath(settings_.rootPath);
@@ -40,12 +42,22 @@ void MainWidget::initializeTreeView(QVBoxLayout *layout)
     if(settings_.dontWatch)
         model_->setOption(QFileSystemModel::DontWatchForChanges);
 
-    proxyModel_ = new QSortFilterProxyModel(this);
+    proxyModel_ = new FileSystemProxyModel(this);
     proxyModel_->setSourceModel(model_);
     proxyModel_->setFilterKeyColumn(0);
     proxyModel_->setFilterCaseSensitivity(Qt::CaseInsensitive);
     proxyModel_->setRecursiveFilteringEnabled(true);
+}
 
+void MainWidget::initializeDelegate()
+{
+    delegate_ = new SizeDelegate(this);
+    tree_->setItemDelegateForColumn(1, delegate_);
+    connect(delegate_, &SizeDelegate::SizeUpdateRequest, proxyModel_, &FileSystemProxyModel::updateFolderSize);
+}
+
+void MainWidget::initializeTreeView(QVBoxLayout *layout)
+{
     tree_ = new QTreeView(this);
     tree_->setModel(proxyModel_);
 

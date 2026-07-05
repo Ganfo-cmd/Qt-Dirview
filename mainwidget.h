@@ -1,12 +1,14 @@
 #ifndef MAINWIDGET_H
 #define MAINWIDGET_H
 
+#include "filesystemproxymodel.h"
+#include "sizedelegate.h"
+
 #include <QWidget>
 #include <QFileSystemModel>
 #include <QTreeView>
 #include <QVBoxLayout>
 #include <QLineEdit>
-#include <QSortFilterProxyModel>
 
 struct CommandLineSettings
 {
@@ -30,11 +32,15 @@ private:
     QLineEdit *filterLine_ = nullptr;
 
     QFileSystemModel *model_ = nullptr;
-    QSortFilterProxyModel *proxyModel_ = nullptr;
+    FileSystemProxyModel *proxyModel_ = nullptr;
+
+    SizeDelegate *delegate_ = nullptr;
     QTreeView *tree_ = nullptr;
 
     void initialize();
     void initializeFilterLine(QVBoxLayout *layout);
+    void initializeModels();
+    void initializeDelegate();
     void initializeTreeView(QVBoxLayout *layout);
 
     void updateRootIndex();
