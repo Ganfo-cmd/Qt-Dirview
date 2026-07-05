@@ -23,21 +23,19 @@ int main(int argc, char *argv[])
     parser.addPositionalArgument("directory", "The directory to start in.");
     parser.process(app);
     const QString rootPath = parser.positionalArguments().isEmpty()
-        ? QString() : parser.positionalArguments().first();
+        ? QDir::homePath() : QDir::cleanPath(parser.positionalArguments().first());
 
     QFileSystemModel model;
-    model.setRootPath("");
+    model.setRootPath(rootPath);
     if (parser.isSet(dontUseCustomDirectoryIconsOption))
         model.setOption(QFileSystemModel::DontUseCustomDirectoryIcons);
     if (parser.isSet(dontWatchOption))
         model.setOption(QFileSystemModel::DontWatchForChanges);
     QTreeView tree;
     tree.setModel(&model);
-    if (!rootPath.isEmpty()) {
-        const QModelIndex rootIndex = model.index(QDir::cleanPath(rootPath));
-        if (rootIndex.isValid())
-            tree.setRootIndex(rootIndex);
-    }
+    const QModelIndex rootIndex = model.index(rootPath);
+    if (rootIndex.isValid())
+        tree.setRootIndex(rootIndex);
 
     // Demonstrating look and feel features
     tree.setAnimated(false);
