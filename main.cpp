@@ -1,17 +1,12 @@
+#include "mainwidget.h"
+
 #include <QApplication>
-#include <QFileSystemModel>
 #include <QFileIconProvider>
-#include <QScreen>
-#include <QScroller>
-#include <QTreeView>
 #include <QCommandLineParser>
 #include <QCommandLineOption>
 
-int main(int argc, char *argv[])
+CommandLineSettings parseCommandLine(const QApplication& app)
 {
-    QApplication app(argc, argv);
-
-    QCoreApplication::setApplicationVersion(QT_VERSION_STR);
     QCommandLineParser parser;
     parser.setApplicationDescription("Qt Dir View Example");
     parser.addHelpOption();
@@ -23,34 +18,29 @@ int main(int argc, char *argv[])
     parser.addPositionalArgument("directory", "The directory to start in.");
     parser.process(app);
     const QString rootPath = parser.positionalArguments().isEmpty()
-        ? QDir::homePath() : QDir::cleanPath(parser.positionalArguments().first());
+                                 ? QDir::homePath() : QDir::cleanPath(parser.positionalArguments().first());
 
-    QFileSystemModel model;
-    model.setRootPath(rootPath);
-    model.setFilter(QDir::AllEntries | QDir::NoDotAndDotDot | QDir::Hidden);
+    CommandLineSettings commandSettings;
+    commandSettings.rootPath = rootPath;
     if (parser.isSet(dontUseCustomDirectoryIconsOption))
-        model.setOption(QFileSystemModel::DontUseCustomDirectoryIcons);
+        commandSettings.dontUseCustomDirectoryIcons = true;
     if (parser.isSet(dontWatchOption))
-        model.setOption(QFileSystemModel::DontWatchForChanges);
-    QTreeView tree;
-    tree.setModel(&model);
-    const QModelIndex rootIndex = model.index(rootPath);
-    if (rootIndex.isValid())
-        tree.setRootIndex(rootIndex);
+        commandSettings.dontWatch = true;
 
-    // Demonstrating look and feel features
-    tree.setAnimated(false);
-    tree.setIndentation(20);
-    tree.setSortingEnabled(true);
-    const QSize availableSize = tree.screen()->availableGeometry().size();
-    tree.resize(availableSize / 2);
-    tree.setColumnWidth(0, tree.width() / 3);
+    return commandSettings;
+}
 
-    // Make it flickable on touchscreens
-    QScroller::grabGesture(&tree, QScroller::TouchGesture);
+int main(int argc, char *argv[])
+{
+    QApplication app(argc, argv);
 
-    tree.setWindowTitle(QObject::tr("Dir View"));
-    tree.show();
+    QCoreApplication::setApplicationVersion(QT_VERSION_STR);
+
+    CommandLineSettings settings = parseCommandLine(app);
+    MainWidget mainWidget(settings);
+
+    mainWidget.setWindowTitle(QObject::tr("Dir View"));
+    mainWidget.show();
 
     return app.exec();
 }
