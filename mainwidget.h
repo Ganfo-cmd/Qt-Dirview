@@ -5,6 +5,8 @@
 #include <QFileSystemModel>
 #include <QTreeView>
 #include <QVBoxLayout>
+#include <QLineEdit>
+#include <QSortFilterProxyModel>
 
 struct CommandLineSettings
 {
@@ -17,15 +19,25 @@ class MainWidget : public QWidget
 {
     Q_OBJECT
 public:
-    explicit MainWidget(const CommandLineSettings &commandSettings, QWidget *parent = nullptr);
+    explicit MainWidget(CommandLineSettings commandSettings, QWidget *parent = nullptr);
     ~MainWidget() = default;
 
+private slots:
+    void filterTextChanged(const QString &text);
+
 private:
+    CommandLineSettings settings_;
+    QLineEdit *filterLine_ = nullptr;
+
     QFileSystemModel *model_ = nullptr;
+    QSortFilterProxyModel *proxyModel_ = nullptr;
     QTreeView *tree_ = nullptr;
 
-    void initialize(const CommandLineSettings &commandSettings);
-    void initializeTreeView(QVBoxLayout *layout, const CommandLineSettings &commandSettings);
+    void initialize();
+    void initializeFilterLine(QVBoxLayout *layout);
+    void initializeTreeView(QVBoxLayout *layout);
+
+    void updateRootIndex();
 };
 
 #endif // MAINWIDGET_H
