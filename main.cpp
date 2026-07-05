@@ -27,6 +27,7 @@ int main(int argc, char *argv[])
 
     QFileSystemModel model;
     model.setRootPath(rootPath);
+    model.setFilter(QDir::AllEntries | QDir::NoDotAndDotDot | QDir::Hidden);
     if (parser.isSet(dontUseCustomDirectoryIconsOption))
         model.setOption(QFileSystemModel::DontUseCustomDirectoryIcons);
     if (parser.isSet(dontWatchOption))
