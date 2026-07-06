@@ -28,11 +28,15 @@ jobs:
       run: |
         dpkg-buildpackage -b -us -uc
 
+    - name: Collect artifacts
+      run: |
+        mkdir artifacts
+        cp ../*.deb artifacts/
+        cp ../*.changes artifacts/
+        cp ../*.buildinfo artifacts/
+
     - name: Upload package
       uses: actions/upload-artifact@v4
       with:
         name: dirview
-        path: |
-          ../*.deb
-          ../*.changes
-          ../*.buildinfo
+        path: artifacts/
