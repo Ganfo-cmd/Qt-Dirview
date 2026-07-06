@@ -1,0 +1,11 @@
+Source: dirview
+Section: utils
+Priority: optional
+Maintainer: Ganfo-cmd <motoff.konstantin@yandex.ru>
+Build-Depends: debhelper-compat (= 13), build-essential, qtbase5-dev, qt5-qmake
+
+Package: dirview
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Qt directory viewer
+ A Qt application for browsing the file system.

@@ -1,0 +1,38 @@
+name: Dirview debian build
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repositiry
+      uses: actions/checkout@v4
+
+    - name: Install dependencies
+      run: |
+        sudo apt update
+        sudo apt install -y \
+          debhelper \
+          build-essential \
+          qtbase5-dev \
+          qt5-qmake \
+          dpkg-dev
+
+    - name: Build debian package
+      run: |
+        dpkg-buildpackage -b -us -uc
+
+    - name: Upload package
+      uses: actions/upload-artifact@v4
+      with:
+        name: dirview
+        path: |
+          ../*.deb
+          ../*.changes
+          ../*.buildinfo

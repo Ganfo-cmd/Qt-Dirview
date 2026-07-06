@@ -1,0 +1,517 @@
+Description: Change root folder, add hidden files support, file filtering
+and folder size calculation for Qt dirview example
+
+--- dirview-0.1.orig/dirview.pro
++++ dirview-0.1/dirview.pro
+@@ -1,8 +1,19 @@
+ QT += widgets
+ requires(qtConfig(treeview))
+ 
+-SOURCES       = main.cpp
++TARGET = dirview
++
++SOURCES       = main.cpp \
++    filesystemproxymodel.cpp \
++    mainwidget.cpp \
++    sizedelegate.cpp
+ 
+ # install
+-target.path = $$[QT_INSTALL_EXAMPLES]/widgets/itemviews/dirview
++target.path = /usr/bin
+ INSTALLS += target
++
++HEADERS += \
++    filesystemproxymodel.h \
++    mainwidget.h \
++    roles.h \
++    sizedelegate.h
+--- /dev/null
++++ dirview-0.1/filesystemproxymodel.cpp
+@@ -0,0 +1,76 @@
++#include "filesystemproxymodel.h"
++#include "roles.h"
++
++#include <QFileSystemModel>
++#include <QLocale>
++
++FileSystemProxyModel::FileSystemProxyModel(QObject *parent) : QSortFilterProxyModel(parent)
++{
++
++}
++
++QVariant FileSystemProxyModel::data(const QModelIndex &index, int role) const
++{
++    if(!index.isValid())
++        return {};
++
++    QModelIndex sourceIndex = mapToSource(index);
++    QFileSystemModel* model = qobject_cast<QFileSystemModel *>(sourceModel());
++    if(!model)
++        return QSortFilterProxyModel::data(index, role);
++
++    if(role == IsFolderRole)
++        return model->isDir(sourceIndex);
++
++    if(role == FolderSizeRole && index.column() == 1)
++    {
++        if(!model->isDir(sourceIndex))
++            return {};
++
++        QString path = model->filePath(sourceIndex);
++        auto it = foldersSizeByPath_.find(path);
++        if(it != foldersSizeByPath_.end())
++        {
++            return QLocale().formattedDataSize(it.value());
++        }
++
++        return {};
++    }
++
++    return QSortFilterProxyModel::data(index, role);
++}
++
++void FileSystemProxyModel::updateFolderSize(const QModelIndex &index)
++{
++    QModelIndex sourceIndex = mapToSource(index);
++    QFileSystemModel* model = qobject_cast<QFileSystemModel *>(sourceModel());
++    if (!model || !model->isDir(sourceIndex))
++        return;
++
++    QString path = model->filePath(sourceIndex);
++
++    foldersSizeByPath_[path] = calculateFolderSize(path);
++    emit dataChanged(index, index, {FolderSizeRole, Qt::DisplayRole});
++}
++
++quint64 FileSystemProxyModel::calculateFolderSize(const QString &path)
++{
++    quint64 totalSize = 0;
++
++    // Data size is calculated only for data that is physically
++    // located within the folder
++    QDirIterator it(path,  QDir::Files | QDir::NoDotAndDotDot | QDir::Hidden , QDirIterator::Subdirectories);
++
++    while(it.hasNext())
++    {
++        it.next();
++
++        QFileInfo info = it.fileInfo();
++        if(info.isFile())
++        {
++            totalSize += info.size();
++        }
++    }
++
++    return totalSize;
++}
+--- /dev/null
++++ dirview-0.1/filesystemproxymodel.h
+@@ -0,0 +1,23 @@
++#ifndef FILESYSTEMPROXYMODEL_H
++#define FILESYSTEMPROXYMODEL_H
++
++#include <QSortFilterProxyModel>
++
++class FileSystemProxyModel : public QSortFilterProxyModel
++{
++    Q_OBJECT
++public:
++    explicit FileSystemProxyModel(QObject *parent = nullptr);
++
++    QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const override;
++
++public slots:
++    void updateFolderSize(const QModelIndex &index);
++
++private:
++    QHash<QString, quint64> foldersSizeByPath_;
++
++    quint64 calculateFolderSize(const QString &path);
++};
++
++#endif // FILESYSTEMPROXYMODEL_H
+--- dirview-0.1.orig/main.cpp
++++ dirview-0.1/main.cpp
+@@ -1,67 +1,12 @@
+-/****************************************************************************
+-**
+-** Copyright (C) 2020 The Qt Company Ltd.
+-** Contact: https://www.qt.io/licensing/
+-**
+-** This file is part of the examples of the Qt Toolkit.
+-**
+-** $QT_BEGIN_LICENSE:BSD$
+-** Commercial License Usage
+-** Licensees holding valid commercial Qt licenses may use this file in
+-** accordance with the commercial license agreement provided with the
+-** Software or, alternatively, in accordance with the terms contained in
+-** a written agreement between you and The Qt Company. For licensing terms
+-** and conditions see https://www.qt.io/terms-conditions. For further
+-** information use the contact form at https://www.qt.io/contact-us.
+-**
+-** BSD License Usage
+-** Alternatively, you may use this file under the terms of the BSD license
+-** as follows:
+-**
+-** "Redistribution and use in source and binary forms, with or without
+-** modification, are permitted provided that the following conditions are
+-** met:
+-**   * Redistributions of source code must retain the above copyright
+-**     notice, this list of conditions and the following disclaimer.
+-**   * Redistributions in binary form must reproduce the above copyright
+-**     notice, this list of conditions and the following disclaimer in
+-**     the documentation and/or other materials provided with the
+-**     distribution.
+-**   * Neither the name of The Qt Company Ltd nor the names of its
+-**     contributors may be used to endorse or promote products derived
+-**     from this software without specific prior written permission.
+-**
+-**
+-** THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+-** "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+-** LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+-** A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+-** OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+-** SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+-** LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+-** DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+-** THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+-** (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+-** OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE."
+-**
+-** $QT_END_LICENSE$
+-**
+-****************************************************************************/
++#include "mainwidget.h"
+ 
+ #include <QApplication>
+-#include <QFileSystemModel>
+ #include <QFileIconProvider>
+-#include <QScreen>
+-#include <QScroller>
+-#include <QTreeView>
+ #include <QCommandLineParser>
+ #include <QCommandLineOption>
+ 
+-int main(int argc, char *argv[])
++CommandLineSettings parseCommandLine(const QApplication& app)
+ {
+-    QApplication app(argc, argv);
+-
+-    QCoreApplication::setApplicationVersion(QT_VERSION_STR);
+     QCommandLineParser parser;
+     parser.setApplicationDescription("Qt Dir View Example");
+     parser.addHelpOption();
+@@ -73,35 +18,29 @@ int main(int argc, char *argv[])
+     parser.addPositionalArgument("directory", "The directory to start in.");
+     parser.process(app);
+     const QString rootPath = parser.positionalArguments().isEmpty()
+-        ? QString() : parser.positionalArguments().first();
++                                 ? QDir::homePath() : QDir::cleanPath(parser.positionalArguments().first());
+ 
+-    QFileSystemModel model;
+-    model.setRootPath("");
++    CommandLineSettings commandSettings;
++    commandSettings.rootPath = rootPath;
+     if (parser.isSet(dontUseCustomDirectoryIconsOption))
+-        model.setOption(QFileSystemModel::DontUseCustomDirectoryIcons);
++        commandSettings.dontUseCustomDirectoryIcons = true;
+     if (parser.isSet(dontWatchOption))
+-        model.setOption(QFileSystemModel::DontWatchForChanges);
+-    QTreeView tree;
+-    tree.setModel(&model);
+-    if (!rootPath.isEmpty()) {
+-        const QModelIndex rootIndex = model.index(QDir::cleanPath(rootPath));
+-        if (rootIndex.isValid())
+-            tree.setRootIndex(rootIndex);
+-    }
+-
+-    // Demonstrating look and feel features
+-    tree.setAnimated(false);
+-    tree.setIndentation(20);
+-    tree.setSortingEnabled(true);
+-    const QSize availableSize = tree.screen()->availableGeometry().size();
+-    tree.resize(availableSize / 2);
+-    tree.setColumnWidth(0, tree.width() / 3);
++        commandSettings.dontWatch = true;
++
++    return commandSettings;
++}
++
++int main(int argc, char *argv[])
++{
++    QApplication app(argc, argv);
++
++    QCoreApplication::setApplicationVersion(QT_VERSION_STR);
+ 
+-    // Make it flickable on touchscreens
+-    QScroller::grabGesture(&tree, QScroller::TouchGesture);
++    CommandLineSettings settings = parseCommandLine(app);
++    MainWidget mainWidget(settings);
+ 
+-    tree.setWindowTitle(QObject::tr("Dir View"));
+-    tree.show();
++    mainWidget.setWindowTitle(QObject::tr("Dir View"));
++    mainWidget.show();
+ 
+     return app.exec();
+ }
+--- /dev/null
++++ dirview-0.1/mainwidget.cpp
+@@ -0,0 +1,91 @@
++#include "mainwidget.h"
++
++#include <QScreen>
++#include <QScroller>
++#include <QHeaderView>
++
++MainWidget::MainWidget(CommandLineSettings commandSettings, QWidget *parent)
++    : QWidget{parent}, settings_(std::move(commandSettings))
++{
++    initialize();
++}
++
++void MainWidget::initialize()
++{
++    const QSize availableSize = screen()->availableGeometry().size();
++    resize(availableSize / 2);
++
++    QVBoxLayout *layout = new QVBoxLayout(this);
++    initializeFilterLine(layout);
++    initializeModels();
++    initializeTreeView(layout);
++    initializeDelegate();
++}
++
++void MainWidget::initializeFilterLine(QVBoxLayout *layout)
++{
++    filterLine_ = new QLineEdit(this);
++    filterLine_->setPlaceholderText("Введите имя файла или папки");
++    layout->addWidget(filterLine_);
++
++    connect(filterLine_, &QLineEdit::textChanged, this, &MainWidget::filterTextChanged);
++}
++
++void MainWidget::initializeModels()
++{
++    model_ = new QFileSystemModel(this);
++    model_->setRootPath(settings_.rootPath);
++    model_->setFilter(QDir::AllEntries | QDir::NoDotAndDotDot | QDir::Hidden);
++
++    if(settings_.dontUseCustomDirectoryIcons)
++        model_->setOption(QFileSystemModel::DontUseCustomDirectoryIcons);
++    if(settings_.dontWatch)
++        model_->setOption(QFileSystemModel::DontWatchForChanges);
++
++    proxyModel_ = new FileSystemProxyModel(this);
++    proxyModel_->setSourceModel(model_);
++    proxyModel_->setFilterKeyColumn(0);
++    proxyModel_->setFilterCaseSensitivity(Qt::CaseInsensitive);
++    proxyModel_->setRecursiveFilteringEnabled(true);
++}
++
++void MainWidget::initializeDelegate()
++{
++    delegate_ = new SizeDelegate(this);
++    tree_->setItemDelegateForColumn(1, delegate_);
++    connect(delegate_, &SizeDelegate::SizeUpdateRequest, proxyModel_, &FileSystemProxyModel::updateFolderSize);
++}
++
++void MainWidget::initializeTreeView(QVBoxLayout *layout)
++{
++    tree_ = new QTreeView(this);
++    tree_->setModel(proxyModel_);
++
++    updateRootIndex();
++
++    // Demonstrating look and feel features
++    tree_->setAnimated(false);
++    tree_->setIndentation(20);
++    tree_->setSortingEnabled(true);
++    tree_->header()->setSectionResizeMode(0, QHeaderView::Stretch);
++
++    // Make it flickable on touchscreens
++    QScroller::grabGesture(tree_, QScroller::TouchGesture);
++
++    layout->addWidget(tree_);
++}
++
++void MainWidget::filterTextChanged(const QString &text)
++{
++    proxyModel_->setFilterRegularExpression(QRegularExpression::escape(text));
++    updateRootIndex();
++}
++
++void MainWidget::updateRootIndex()
++{
++    const QModelIndex sourceIndex = model_->index(settings_.rootPath);
++    const QModelIndex proxyIndex = proxyModel_->mapFromSource(sourceIndex);
++
++    if (proxyIndex.isValid())
++        tree_->setRootIndex(proxyIndex);
++}
+--- /dev/null
++++ dirview-0.1/mainwidget.h
+@@ -0,0 +1,49 @@
++#ifndef MAINWIDGET_H
++#define MAINWIDGET_H
++
++#include "filesystemproxymodel.h"
++#include "sizedelegate.h"
++
++#include <QWidget>
++#include <QFileSystemModel>
++#include <QTreeView>
++#include <QVBoxLayout>
++#include <QLineEdit>
++
++struct CommandLineSettings
++{
++    QString rootPath;
++    bool dontUseCustomDirectoryIcons = false;
++    bool dontWatch = false;
++};
++
++class MainWidget : public QWidget
++{
++    Q_OBJECT
++public:
++    explicit MainWidget(CommandLineSettings commandSettings, QWidget *parent = nullptr);
++    ~MainWidget() = default;
++
++private slots:
++    void filterTextChanged(const QString &text);
++
++private:
++    CommandLineSettings settings_;
++    QLineEdit *filterLine_ = nullptr;
++
++    QFileSystemModel *model_ = nullptr;
++    FileSystemProxyModel *proxyModel_ = nullptr;
++
++    SizeDelegate *delegate_ = nullptr;
++    QTreeView *tree_ = nullptr;
++
++    void initialize();
++    void initializeFilterLine(QVBoxLayout *layout);
++    void initializeModels();
++    void initializeDelegate();
++    void initializeTreeView(QVBoxLayout *layout);
++
++    void updateRootIndex();
++};
++
++#endif // MAINWIDGET_H
+--- /dev/null
++++ dirview-0.1/roles.h
+@@ -0,0 +1,13 @@
++#ifndef ROLES_H
++#define ROLES_H
++
++#include <Qt>
++
++enum FileSystemRoles
++{
++    IsFolderRole = Qt::UserRole + 1,
++    FolderSizeRole
++
++};
++
++#endif // ROLES_H
+--- /dev/null
++++ dirview-0.1/sizedelegate.cpp
+@@ -0,0 +1,67 @@
++#include "sizedelegate.h"
++
++#include <QApplication>
++#include <QMouseEvent>
++#include <QSortFilterProxyModel>
++#include <QFileSystemModel>
++#include <QPainter>
++
++SizeDelegate::SizeDelegate(QObject *parent) : QStyledItemDelegate(parent)
++{
++
++}
++
++void SizeDelegate::paint(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const
++{
++    QStyledItemDelegate::paint(painter, option, index);
++
++    if(index.data(IsFolderRole).toBool())
++    {
++        QRect textRect = option.rect;
++        textRect.setWidth(80);
++
++        painter->drawText(textRect, Qt::AlignVCenter | Qt::AlignRight, index.data(FolderSizeRole).toString());
++
++        QRect buttonRect = option.rect;
++        buttonRect.setLeft(textRect.right());
++        buttonRect.setWidth(18);
++
++        QStyleOptionButton button;
++        button.rect = buttonRect;
++        button.icon = QApplication::style()->standardIcon(QStyle::SP_BrowserReload);
++
++        QApplication::style()->drawControl(QStyle::CE_PushButton, &button, painter);
++    }
++}
++
++bool SizeDelegate::editorEvent(QEvent *event, QAbstractItemModel *model, const QStyleOptionViewItem &option, const QModelIndex &index)
++{
++    Q_UNUSED(model);
++
++    if (event->type() != QEvent::MouseButtonRelease)
++    {
++        return false;
++    }
++
++    if(!index.data(IsFolderRole).toBool())
++    {
++        return false;
++    }
++
++    QRect textRect = option.rect;
++    textRect.setWidth(80);
++
++    QRect buttonRect = option.rect;
++    buttonRect.setLeft(textRect.right());
++    buttonRect.setWidth(18);
++
++    QMouseEvent *mouseEvent = static_cast<QMouseEvent *>(event);
++    if (buttonRect.contains(mouseEvent->pos()))
++    {
++        emit SizeUpdateRequest(index);
++        return true;
++    }
++
++
++    return false;
++}
+\ No newline at end of file
+--- /dev/null
++++ dirview-0.1/sizedelegate.h
+@@ -0,0 +1,23 @@
++#ifndef SIZEDELEGATE_H
++#define SIZEDELEGATE_H
++
++#include "roles.h"
++
++#include <QStyledItemDelegate>
++
++class SizeDelegate : public QStyledItemDelegate
++{
++    Q_OBJECT
++public:
++    SizeDelegate(QObject *parent = nullptr);
++
++signals:
++    void SizeUpdateRequest(const QModelIndex &index);
++
++private:
++    void paint(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const override;
++
++    bool editorEvent(QEvent *event, QAbstractItemModel *model, const QStyleOptionViewItem &option, const QModelIndex &index) override;
++};
++
++#endif // SIZEDELEGATE_H
