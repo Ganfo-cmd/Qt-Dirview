@@ -1,13 +1,15 @@
 QT += widgets
 requires(qtConfig(treeview))
 
+TARGET = dirview
+
 SOURCES       = main.cpp \
     filesystemproxymodel.cpp \
     mainwidget.cpp \
     sizedelegate.cpp
 
 # install
-target.path = $$[QT_INSTALL_EXAMPLES]/widgets/itemviews/dirview
+target.path = /usr/bin
 INSTALLS += target
 
 HEADERS += \
