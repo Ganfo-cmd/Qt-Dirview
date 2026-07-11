@@ -5,7 +5,7 @@
 #include <QHeaderView>
 
 MainWidget::MainWidget(CommandLineSettings commandSettings, QWidget *parent)
-    : QWidget{parent}, settings_(std::move(commandSettings))
+    : QWidget{parent}, m_settings(std::move(commandSettings))
 {
     initialize();
 }
@@ -24,68 +24,68 @@ void MainWidget::initialize()
 
 void MainWidget::initializeFilterLine(QVBoxLayout *layout)
 {
-    filterLine_ = new QLineEdit(this);
-    filterLine_->setPlaceholderText("Введите имя файла или папки");
-    layout->addWidget(filterLine_);
+    m_filterLine = new QLineEdit(this);
+    m_filterLine->setPlaceholderText("Введите имя файла или папки");
+    layout->addWidget(m_filterLine);
 
-    connect(filterLine_, &QLineEdit::textChanged, this, &MainWidget::filterTextChanged);
+    connect(m_filterLine, &QLineEdit::textChanged, this, &MainWidget::filterTextChanged);
 }
 
 void MainWidget::initializeModels()
 {
-    model_ = new QFileSystemModel(this);
-    model_->setRootPath(settings_.rootPath);
-    model_->setFilter(QDir::AllEntries | QDir::NoDotAndDotDot | QDir::Hidden);
+    m_model = new QFileSystemModel(this);
+    m_model->setRootPath(m_settings.rootPath);
+    m_model->setFilter(QDir::AllEntries | QDir::NoDotAndDotDot | QDir::Hidden);
 
-    if(settings_.dontUseCustomDirectoryIcons)
-        model_->setOption(QFileSystemModel::DontUseCustomDirectoryIcons);
-    if(settings_.dontWatch)
-        model_->setOption(QFileSystemModel::DontWatchForChanges);
+    if(m_settings.dontUseCustomDirectoryIcons)
+        m_model->setOption(QFileSystemModel::DontUseCustomDirectoryIcons);
+    if(m_settings.dontWatch)
+        m_model->setOption(QFileSystemModel::DontWatchForChanges);
 
-    proxyModel_ = new FileSystemProxyModel(this);
-    proxyModel_->setSourceModel(model_);
-    proxyModel_->setFilterKeyColumn(0);
-    proxyModel_->setFilterCaseSensitivity(Qt::CaseInsensitive);
-    proxyModel_->setRecursiveFilteringEnabled(true);
+    m_proxyModel = new FileSystemProxyModel(this);
+    m_proxyModel->setSourceModel(m_model);
+    m_proxyModel->setFilterKeyColumn(0);
+    m_proxyModel->setFilterCaseSensitivity(Qt::CaseInsensitive);
+    m_proxyModel->setRecursiveFilteringEnabled(true);
 }
 
 void MainWidget::initializeDelegate()
 {
-    delegate_ = new SizeDelegate(this);
-    tree_->setItemDelegateForColumn(1, delegate_);
-    connect(delegate_, &SizeDelegate::SizeUpdateRequest, proxyModel_, &FileSystemProxyModel::updateFolderSize);
+    m_delegate = new SizeDelegate(this);
+    m_tree->setItemDelegateForColumn(1, m_delegate);
+    connect(m_delegate, &SizeDelegate::SizeUpdateRequest, m_proxyModel, &FileSystemProxyModel::updateFolderSize);
 }
 
 void MainWidget::initializeTreeView(QVBoxLayout *layout)
 {
-    tree_ = new QTreeView(this);
-    tree_->setModel(proxyModel_);
+    m_tree = new QTreeView(this);
+    m_tree->setModel(m_proxyModel);
 
     updateRootIndex();
 
     // Demonstrating look and feel features
-    tree_->setAnimated(false);
-    tree_->setIndentation(20);
-    tree_->setSortingEnabled(true);
-    tree_->header()->setSectionResizeMode(0, QHeaderView::Stretch);
+    m_tree->setAnimated(false);
+    m_tree->setIndentation(20);
+    m_tree->setSortingEnabled(true);
+    m_tree->header()->setSectionResizeMode(0, QHeaderView::Stretch);
 
     // Make it flickable on touchscreens
-    QScroller::grabGesture(tree_, QScroller::TouchGesture);
+    QScroller::grabGesture(m_tree, QScroller::TouchGesture);
 
-    layout->addWidget(tree_);
+    layout->addWidget(m_tree);
 }
 
 void MainWidget::filterTextChanged(const QString &text)
 {
-    proxyModel_->setFilterRegularExpression(QRegularExpression::escape(text));
+    m_proxyModel->setFilterRegularExpression(QRegularExpression::escape(text));
     updateRootIndex();
 }
 
 void MainWidget::updateRootIndex()
 {
-    const QModelIndex sourceIndex = model_->index(settings_.rootPath);
-    const QModelIndex proxyIndex = proxyModel_->mapFromSource(sourceIndex);
+    const QModelIndex sourceIndex = m_model->index(m_settings.rootPath);
+    const QModelIndex proxyIndex = m_proxyModel->mapFromSource(sourceIndex);
 
     if (proxyIndex.isValid())
-        tree_->setRootIndex(proxyIndex);
+        m_tree->setRootIndex(proxyIndex);
 }

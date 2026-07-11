@@ -28,14 +28,14 @@ private slots:
     void filterTextChanged(const QString &text);
 
 private:
-    CommandLineSettings settings_;
-    QLineEdit *filterLine_ = nullptr;
+    CommandLineSettings m_settings;
+    QLineEdit *m_filterLine = nullptr;
 
-    QFileSystemModel *model_ = nullptr;
-    FileSystemProxyModel *proxyModel_ = nullptr;
+    QFileSystemModel *m_model = nullptr;
+    FileSystemProxyModel *m_proxyModel = nullptr;
 
-    SizeDelegate *delegate_ = nullptr;
-    QTreeView *tree_ = nullptr;
+    SizeDelegate *m_delegate = nullptr;
+    QTreeView *m_tree = nullptr;
 
     void initialize();
     void initializeFilterLine(QVBoxLayout *layout);
