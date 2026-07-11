@@ -17,14 +17,11 @@ void SizeDelegate::paint(QPainter *painter, const QStyleOptionViewItem &option, 
 
     if(index.data(IsFolderRole).toBool())
     {
-        QRect textRect = option.rect;
-        textRect.setWidth(80);
+        QRect textRect = createTextRect(option);
 
         painter->drawText(textRect, Qt::AlignVCenter | Qt::AlignRight, index.data(FolderSizeRole).toString());
 
-        QRect buttonRect = option.rect;
-        buttonRect.setLeft(textRect.right());
-        buttonRect.setWidth(18);
+        QRect buttonRect = createButtonRect(option);
 
         QStyleOptionButton button;
         button.rect = buttonRect;
@@ -48,12 +45,7 @@ bool SizeDelegate::editorEvent(QEvent *event, QAbstractItemModel *model, const Q
         return false;
     }
 
-    QRect textRect = option.rect;
-    textRect.setWidth(80);
-
-    QRect buttonRect = option.rect;
-    buttonRect.setLeft(textRect.right());
-    buttonRect.setWidth(18);
+    QRect buttonRect = createButtonRect(option);
 
     QMouseEvent *mouseEvent = static_cast<QMouseEvent *>(event);
     if (buttonRect.contains(mouseEvent->pos()))
@@ -62,6 +54,21 @@ bool SizeDelegate::editorEvent(QEvent *event, QAbstractItemModel *model, const Q
         return true;
     }
 
-
     return false;
+}
+
+QRect SizeDelegate::createTextRect(const QStyleOptionViewItem &option) const
+{
+    QRect textRect = option.rect;
+    textRect.setLeft(textRect.right() - s_buttonWidth - s_textWidth);
+    textRect.setWidth(s_textWidth);
+    return textRect;
+}
+
+QRect SizeDelegate::createButtonRect(const QStyleOptionViewItem &option) const
+{
+    QRect buttonRect = option.rect;
+    buttonRect.setLeft(buttonRect.right() - s_buttonWidth);
+    buttonRect.setWidth(s_buttonWidth);
+    return buttonRect;
 }
