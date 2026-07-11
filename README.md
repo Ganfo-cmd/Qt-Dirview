@@ -14,13 +14,18 @@
 
 Для сборки используется:
 ```
-dpkg-buildpackage -b
+dpkg-buildpackage -b -us -uc
 ```
 Готовые пакеты Debian доступны в разделе GitHub Releases.
 
 ## Debian patches
+Оформление изменений относительно исходного кода. Формирование патчей:
+```
+dpkg-source --before-build .
+dpkg-source --commit
+```
 
-Оформление изменений относительно исходного кода. Изменения располагаются в
+Изменения располагаются в
 ```
 debian/patches/
 ```
