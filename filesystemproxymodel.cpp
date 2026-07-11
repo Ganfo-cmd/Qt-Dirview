@@ -6,7 +6,34 @@
 
 FileSystemProxyModel::FileSystemProxyModel(QObject *parent) : QSortFilterProxyModel(parent)
 {
+    initializeThread();
+}
 
+FileSystemProxyModel::~FileSystemProxyModel()
+{
+    m_folderSizeThread->quit();
+    m_folderSizeThread->wait();
+}
+
+void FileSystemProxyModel::initializeThread()
+{
+    m_folderSizeThread = new QThread(this);
+
+    m_folderSizeWorker = new FolderSizeWorker();
+    m_folderSizeWorker->moveToThread(m_folderSizeThread);
+
+    connect(m_folderSizeThread, &QThread::finished, m_folderSizeWorker, &QObject::deleteLater);
+
+    m_folderSizeThread->start();
+
+    connect(this, &FileSystemProxyModel::calculateFolderSizeRequest, m_folderSizeWorker, &FolderSizeWorker::calculateFolderSize, Qt::QueuedConnection);
+
+    connect(m_folderSizeWorker, &FolderSizeWorker::finished, this,
+            [this](const QPersistentModelIndex & index, const QString &path, quint64 size)
+            {
+                m_foldersSizeByPath[path] = size;
+                emit dataChanged(index, index, {FolderSizeRole});
+            });
 }
 
 QVariant FileSystemProxyModel::data(const QModelIndex &index, int role) const
@@ -28,8 +55,8 @@ QVariant FileSystemProxyModel::data(const QModelIndex &index, int role) const
             return {};
 
         QString path = model->filePath(sourceIndex);
-        auto it = foldersSizeByPath_.find(path);
-        if(it != foldersSizeByPath_.end())
+        auto it = m_foldersSizeByPath.find(path);
+        if(it != m_foldersSizeByPath.end())
         {
             return QLocale().formattedDataSize(it.value());
         }
@@ -49,28 +76,5 @@ void FileSystemProxyModel::updateFolderSize(const QModelIndex &index)
 
     QString path = model->filePath(sourceIndex);
 
-    foldersSizeByPath_[path] = calculateFolderSize(path);
-    emit dataChanged(index, index, {FolderSizeRole, Qt::DisplayRole});
-}
-
-quint64 FileSystemProxyModel::calculateFolderSize(const QString &path)
-{
-    quint64 totalSize = 0;
-
-    // Data size is calculated only for data that is physically
-    // located within the folder
-    QDirIterator it(path,  QDir::Files | QDir::NoDotAndDotDot | QDir::Hidden , QDirIterator::Subdirectories);
-
-    while(it.hasNext())
-    {
-        it.next();
-
-        QFileInfo info = it.fileInfo();
-        if(info.isFile())
-        {
-            totalSize += info.size();
-        }
-    }
-
-    return totalSize;
+    emit calculateFolderSizeRequest(index, path);
 }
